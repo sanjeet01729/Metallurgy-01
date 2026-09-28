@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+trashh.ipynb
+
+# Trained models / generated artifacts
+*.pkl
+
+# ML outputs
+shap_feature_importance.csv
+shap_summary.png
+model_comparison.csv
+model_metrics.pkl
+titanium_alloys.csv
+
+# macOS
+.DS_Store
