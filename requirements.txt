@@ -4,7 +4,7 @@ appnope==1.0.0
 asttokens==3.0.2
 attrs==26.1.0
 catboost==1.2.10
-certifi==2026.7.22
+certifi==2026.10.18
 charset-normalizer==3.5.1
 click==8.5.0
 cloudpickle==3.1.2
@@ -45,7 +45,7 @@ packaging==26.3
 pandas==3.0.6
 parso==0.8.7
 pexpect==4.9.0
-pillow==12.3.0
+pillow==13.0.0
 platformdirs==4.12.1
 plotly==7.1.0
 prompt_toolkit==3.0.53
@@ -73,7 +73,7 @@ starlette==1.7.0
 streamlit==1.64.0
 threadpoolctl==3.7.0
 toml==0.10.2
-tornado==6.5.10
+tornado==6.6
 tqdm==4.70.1
 traitlets==5.16.1
 typing_extensions==4.16.0
