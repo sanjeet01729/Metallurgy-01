@@ -1,0 +1,478 @@
+Titanium alloy composition-feature generation
+============================================
+Input: /Users/sanjeetkumar/Desktop/metallurgy/Metallurgy-01/combined_ym_clean.csv
+Output: /Users/sanjeetkumar/Desktop/metallurgy/Metallurgy-01/combined_ym_features.csv
+Rows before: 897
+Rows after: 897
+Exact duplicate rows after feature generation (counted, not removed): 0
+Configured UNIT: 'wt'; row normalization is applied before feature calculations.
+Input columns are copied unchanged and remain in their original order; derived columns follow.
+Rows with any NaN in any input column receive NaN for every derived column. Invalid negative or zero-total compositions are also marked NaN.
+Absent elements (zero concentration) contribute zero. Derived features are not rounded.
+
+Feature definitions, units, and references:
+- VEC (electron/atom): sum(x_i * VEC_i), x_i atomic fraction. VEC assignments were specified in the task; the electron/atom design concept is described by Williams (1975), 'Using electron/atom ratio in titanium alloy design,' Journal of Materials Science 10, 1239-1241, doi:10.1007/BF00541408.
+- delta_r (%): 100*sqrt(sum(x_i*(1-r_i/r_mean)^2)); r_mean=sum(x_i*r_i). Formula follows the atomic-size mismatch descriptor; see Zhang et al. (2008), 'Solid-Solution Phase Formation Rules for Multi-Component Alloys,' Advanced Engineering Materials 10, 534-538, doi:10.1002/adem.200700240. Metallic-radius reference context: Villars and Calvert (1991), Pearson's Handbook of Crystallographic Data for Intermetallic Phases, 2nd ed. The exact table below reuses existing project values where available and states the Pd choice; the project table does not record primary provenance for each radius.
+- delta_S_mix (J mol^-1 K^-1): -R*sum(x_i*ln(x_i)), zero terms omitted; ideal configurational mixing entropy (Gibbs, 'On the Equilibrium of Heterogeneous Substances,' 1878-1879).
+- Mo_eq (wt%): task-specified linear weight-percent equivalent. Coefficients and formula are the supplied definition; conventional titanium alloy stability/equivalent context: Kolli and Devaraj (2018), 'A Review of Metastable Beta Titanium Alloys,' Metals 8(7), 506, doi:10.3390/met8070506.
+- Al_eq (wt%): Al + Zr/6 + Sn/3 + 10*O using normalized wt%; task-specified formula. Alpha/beta alloy context: Donachie (2000), Titanium: A Technical Guide, 2nd ed., ASM International.
+- Bo (bond order, dimensionless) and Md (eV): atomic-fraction-weighted Morinaga parameters. Morinaga et al. (1986), 'Electronic Structure and Phase Stability of Titanium Alloys,' Tetsu-to-Hagane 72(6), 555-562, doi:10.2355/tetsutohagane1955.72.6_555. Supplied table values are used without extrapolation.
+- phase_est (categorical screening label) and phase_note: Mo_eq < 2.5 -> alpha (near-alpha grouped here); 2.5 <= Mo_eq <= 10 -> alpha+beta; Mo_eq > 10 -> beta. This is a coarse engineering screen, not an equilibrium phase prediction; Mo_eq context: Kolli and Devaraj (2018) and Donachie (2000).
+- ti_based (boolean): normalized Ti_wt >= 70. This is the task-specified applicability flag, not a literature-derived threshold.
+
+Assumptions / interpretation:
+- Atomic masses are standard atomic weights (IUPAC/CIAAW, Standard Atomic Weights 2021; Pure and Applied Chemistry, 2022). The values actually used are listed below.
+- The composition is normalized to 100 in its configured input unit before conversion; atomic fractions use normalized atomic amounts and weight equivalents use normalized weight fractions.
+- phase_est uses the conventional coarse Mo_eq screen: below 2.5 wt% -> alpha, 2.5 through 10 wt% -> alpha+beta, above 10 wt% -> beta. Near-alpha alloys are grouped under 'alpha' because no near-alpha output category was requested.
+- Al_eq >= 8 wt% is treated as large and causes phase_est='uncertain'. This is a conservative screening cutoff, not a universal phase boundary.
+- Pd uses an empirical metallic radius of 137 pm for delta_r but has no supplied Morinaga parameter; rows containing Pd therefore have Bo/Md=NaN.
+- Sc has no supplied Morinaga parameter; rows containing Sc therefore have Bo/Md=NaN.
+- Oxygen has no metallic radius and no supplied Morinaga parameter; rows containing O therefore have delta_r, Bo, and Md as NaN. O is present as a column, so Al_eq is not marked as a lower bound.
+
+Atomic masses used (g mol^-1):
+- Ti: 47.867
+- Nb: 92.906
+- Zr: 91.224
+- Al: 26.9815385
+- Co: 58.933194
+- Cr: 51.9961
+- Cu: 63.546
+- Fe: 55.845
+- Hf: 178.49
+- Mn: 54.938044
+- Mo: 95.95
+- O: 15.999
+- Pd: 106.42
+- Sc: 44.955908
+- Si: 28.085
+- Sn: 118.71
+- Ta: 180.94788
+- V: 50.9415
+- W: 183.84
+
+Metallic radii used (pm; table only includes radii available/needed):
+- Ti: 146
+- Nb: 146
+- Zr: 160
+- Al: 143
+- Co: 126
+- Cr: 128
+- Cu: 128
+- Fe: 126
+- Hf: 159
+- Mn: 127
+- Mo: 139
+- Pd: 137
+- Sc: 162
+- Si: 117
+- Sn: 145
+- Ta: 146
+- V: 134
+- W: 139
+- O has no metallic radius; it is not assigned an invented metallic radius.
+
+VEC values used (electrons/atom):
+- Ti: 4
+- Nb: 5
+- Zr: 4
+- Al: 3
+- Co: 9
+- Cr: 6
+- Cu: 11
+- Fe: 8
+- Hf: 4
+- Mn: 7
+- Mo: 6
+- O: 6
+- Pd: 10
+- Si: 4
+- Sn: 4
+- Ta: 5
+- V: 5
+- W: 6
+- Sc: not defined in supplied VEC table
+
+Morinaga parameters used (Bo dimensionless / Md eV):
+- Ti: Bo=2.790, Md=2.447
+- Nb: Bo=3.099, Md=2.424
+- Zr: Bo=3.086, Md=2.934
+- Al: Bo=2.426, Md=2.200
+- Co: Bo=2.529, Md=0.807
+- Cr: Bo=2.779, Md=1.478
+- Cu: Bo=2.114, Md=0.567
+- Fe: Bo=2.651, Md=0.969
+- Hf: Bo=3.110, Md=3.020
+- Mn: Bo=2.723, Md=1.461
+- Mo: Bo=3.063, Md=1.961
+- Si: Bo=2.561, Md=2.200
+- Sn: Bo=2.283, Md=2.100
+- Ta: Bo=3.144, Md=2.531
+- V: Bo=2.805, Md=1.543
+- W: Bo=3.125, Md=2.072
+
+Rows with NaN features or uncertain phase:
+- CSV data row 3 (index 1): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 5 (index 3): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 6 (index 4): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 20 (index 18): Bo/Md unavailable for Pd
+- CSV data row 21 (index 19): Bo/Md unavailable for Pd
+- CSV data row 22 (index 20): Bo/Md unavailable for Pd
+- CSV data row 23 (index 21): Bo/Md unavailable for Pd
+- CSV data row 24 (index 22): Bo/Md unavailable for Pd
+- CSV data row 37 (index 35): Bo/Md unavailable for O; delta_r unavailable for O
+- CSV data row 38 (index 36): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 39 (index 37): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 40 (index 38): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 41 (index 39): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 42 (index 40): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 43 (index 41): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 44 (index 42): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 45 (index 43): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 46 (index 44): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 47 (index 45): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 48 (index 46): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 49 (index 47): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 50 (index 48): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 51 (index 49): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 52 (index 50): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 62 (index 60): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 63 (index 61): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 64 (index 62): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 65 (index 63): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 66 (index 64): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 69 (index 67): Bo/Md unavailable for O; delta_r unavailable for O
+- CSV data row 70 (index 68): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 71 (index 69): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 72 (index 70): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 73 (index 71): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 74 (index 72): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 78 (index 76): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 80 (index 78): Bo/Md unavailable for Pd
+- CSV data row 81 (index 79): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 97 (index 95): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 100 (index 98): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 123 (index 121): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 129 (index 127): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 130 (index 128): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 131 (index 129): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 199 (index 197): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 200 (index 198): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 227 (index 225): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 228 (index 226): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 250 (index 248): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 251 (index 249): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 252 (index 250): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 329 (index 327): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 330 (index 328): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 380 (index 378): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 381 (index 379): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 382 (index 380): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 383 (index 381): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 384 (index 382): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 385 (index 383): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 386 (index 384): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 387 (index 385): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 388 (index 386): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 389 (index 387): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 390 (index 388): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 391 (index 389): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 396 (index 394): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 397 (index 395): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 398 (index 396): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 399 (index 397): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 400 (index 398): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 401 (index 399): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 402 (index 400): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 404 (index 402): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 405 (index 403): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 406 (index 404): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 407 (index 405): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 408 (index 406): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 409 (index 407): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 410 (index 408): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 411 (index 409): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 412 (index 410): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 413 (index 411): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 414 (index 412): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 415 (index 413): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 416 (index 414): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 417 (index 415): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 418 (index 416): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 419 (index 417): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 420 (index 418): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 421 (index 419): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 422 (index 420): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 423 (index 421): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 424 (index 422): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 425 (index 423): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 426 (index 424): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 427 (index 425): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 428 (index 426): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 429 (index 427): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 430 (index 428): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 431 (index 429): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 432 (index 430): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 433 (index 431): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 434 (index 432): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 435 (index 433): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 436 (index 434): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 437 (index 435): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 438 (index 436): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 439 (index 437): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 440 (index 438): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 441 (index 439): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 442 (index 440): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 443 (index 441): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 444 (index 442): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 445 (index 443): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 446 (index 444): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 447 (index 445): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 448 (index 446): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 449 (index 447): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 450 (index 448): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 451 (index 449): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 452 (index 450): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 453 (index 451): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 454 (index 452): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 455 (index 453): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 461 (index 459): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 462 (index 460): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 464 (index 462): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 465 (index 463): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 466 (index 464): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 467 (index 465): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 475 (index 473): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 477 (index 475): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 478 (index 476): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 479 (index 477): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 480 (index 478): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 481 (index 479): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 482 (index 480): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 483 (index 481): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 484 (index 482): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 485 (index 483): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 486 (index 484): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 487 (index 485): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 488 (index 486): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 489 (index 487): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 490 (index 488): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 491 (index 489): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 492 (index 490): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 493 (index 491): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 494 (index 492): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 495 (index 493): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 496 (index 494): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 497 (index 495): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 498 (index 496): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 499 (index 497): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 500 (index 498): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 503 (index 501): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 504 (index 502): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 505 (index 503): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 506 (index 504): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 507 (index 505): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 508 (index 506): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 509 (index 507): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 510 (index 508): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 511 (index 509): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 512 (index 510): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 513 (index 511): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 514 (index 512): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 515 (index 513): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 516 (index 514): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 517 (index 515): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 520 (index 518): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 521 (index 519): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 522 (index 520): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 523 (index 521): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 524 (index 522): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 525 (index 523): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 526 (index 524): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 527 (index 525): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 528 (index 526): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 529 (index 527): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 530 (index 528): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 532 (index 530): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 534 (index 532): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 535 (index 533): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 536 (index 534): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 537 (index 535): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 561 (index 559): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 562 (index 560): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 563 (index 561): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 564 (index 562): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 570 (index 568): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 571 (index 569): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 572 (index 570): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 574 (index 572): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 580 (index 578): Al_eq >= 8 wt%; strong alpha stabilization makes Mo_eq-only classification uncertain.
+- CSV data row 581 (index 579): Al_eq >= 8 wt%; strong alpha stabilization makes Mo_eq-only classification uncertain.
+- CSV data row 585 (index 583): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 597 (index 595): Al_eq >= 8 wt%; strong alpha stabilization makes Mo_eq-only classification uncertain.
+- CSV data row 606 (index 604): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 607 (index 605): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 608 (index 606): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 609 (index 607): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 610 (index 608): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 611 (index 609): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 619 (index 617): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 628 (index 626): Al_eq >= 8 wt%; strong alpha stabilization makes Mo_eq-only classification uncertain.
+- CSV data row 629 (index 627): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 630 (index 628): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 631 (index 629): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 632 (index 630): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 633 (index 631): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 649 (index 647): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 651 (index 649): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 652 (index 650): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 657 (index 655): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 674 (index 672): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 689 (index 687): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 690 (index 688): Bo/Md unavailable for Sc; VEC unavailable for Sc; Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 692 (index 690): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 693 (index 691): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 694 (index 692): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 695 (index 693): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 696 (index 694): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 711 (index 709): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 735 (index 733): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 736 (index 734): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 737 (index 735): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 763 (index 761): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 764 (index 762): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 765 (index 763): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 766 (index 764): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 767 (index 765): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 768 (index 766): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 769 (index 767): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 771 (index 769): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 772 (index 770): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 773 (index 771): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 774 (index 772): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 775 (index 773): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 776 (index 774): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 777 (index 775): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 778 (index 776): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 779 (index 777): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 780 (index 778): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 781 (index 779): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 782 (index 780): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 783 (index 781): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 784 (index 782): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 785 (index 783): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 786 (index 784): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 787 (index 785): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 788 (index 786): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 789 (index 787): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 790 (index 788): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 791 (index 789): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 792 (index 790): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 793 (index 791): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 794 (index 792): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 795 (index 793): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 796 (index 794): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 797 (index 795): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 798 (index 796): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 799 (index 797): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 800 (index 798): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 801 (index 799): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 802 (index 800): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 803 (index 801): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 804 (index 802): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 805 (index 803): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 806 (index 804): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 807 (index 805): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 808 (index 806): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 809 (index 807): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 810 (index 808): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 811 (index 809): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 812 (index 810): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 813 (index 811): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 817 (index 815): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 818 (index 816): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 825 (index 823): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 826 (index 824): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 827 (index 825): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 828 (index 826): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 829 (index 827): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 830 (index 828): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 831 (index 829): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 832 (index 830): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 833 (index 831): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 834 (index 832): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 835 (index 833): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 836 (index 834): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 838 (index 836): Al_eq >= 8 wt%; strong alpha stabilization makes Mo_eq-only classification uncertain.
+- CSV data row 839 (index 837): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 840 (index 838): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 841 (index 839): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 842 (index 840): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 843 (index 841): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 844 (index 842): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 845 (index 843): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 846 (index 844): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 847 (index 845): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 848 (index 846): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 851 (index 849): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 852 (index 850): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 853 (index 851): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 854 (index 852): Al_eq >= 8 wt%; strong alpha stabilization makes Mo_eq-only classification uncertain.
+- CSV data row 855 (index 853): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 856 (index 854): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 857 (index 855): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 858 (index 856): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 859 (index 857): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 861 (index 859): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 862 (index 860): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 863 (index 861): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 864 (index 862): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 865 (index 863): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 866 (index 864): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 867 (index 865): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 868 (index 866): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 869 (index 867): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 870 (index 868): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 871 (index 869): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 872 (index 870): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 873 (index 871): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 875 (index 873): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 876 (index 874): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 877 (index 875): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 878 (index 876): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 879 (index 877): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 880 (index 878): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 881 (index 879): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+- CSV data row 882 (index 880): Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.
+
+Per-feature min, max, and mean (NaN values omitted):
+- VEC: min=3.2499962, max=9.5997752, mean=4.1924603; non-NaN=896, NaN=1.
+- delta_r: min=0, max=11.026686, mean=1.9149977; non-NaN=895, NaN=2.
+- delta_S_mix: min=0, max=12.757921, mean=4.1182831; non-NaN=897, NaN=0.
+- Mo_eq: min=-62.84, max=118.422, mean=8.0219615; non-NaN=897, NaN=0.
+- Al_eq: min=0, max=62.84, mean=1.9506708; non-NaN=897, NaN=0.
+- Bo: min=2.2492217, max=3.0225325, mean=2.8145842; non-NaN=888, NaN=9.
+- Md: min=0.94306036, max=2.7351086, mean=2.4165805; non-NaN=888, NaN=9.
+- ti_based: min=0, max=1, mean=0.64548495; true=579, false=318.
+- phase_est category counts (categorical feature):
+  - uncertain: 324
+  - alpha+beta: 299
+  - beta: 139
+  - alpha: 135
+- phase_note category counts (categorical explanation):
+  - Ti < 70 wt%; not treated as a Ti-based alloy for phase screening.: 318
+  - 2.5 <= Mo_eq <= 10 wt%; conventional alpha+beta screening range.: 299
+  - Mo_eq > 10 wt%; conventional beta-alloy screening range.: 139
+  - Mo_eq < 2.5 wt%; conventional Mo_eq screening range, with near-alpha alloys grouped as alpha.: 135
+  - Al_eq >= 8 wt%; strong alpha stabilization makes Mo_eq-only classification uncertain.: 6
+
+Physically implausible values:
+- None under the broad descriptor sanity ranges stated in the script.
+
+Rows before: 897
+Rows after: 897
+Exact duplicate rows after adding features (not dropped): 0
+Rows with any input NaN: 0
+Rows with phase_est='uncertain': 324
+Rows with missing Bo/Md due to missing Morinaga table entries: 9
+Rows with missing delta_r due to missing metallic radii: 2
+Rows with missing VEC due to missing VEC table entries: 1

@@ -1,0 +1,180 @@
+SCOPE RESTRICTION AND ENSEMBLE EVALUATION
+=========================================
+Dataset: dataset_v2.csv; rows are composition groups after dataset preparation.
+All candidates use the same features: all *_wt columns plus VEC, delta_r, delta_S_mix, Mo_eq, Al_eq, Bo, Md, and one-hot phase_est.
+The target E_GPa, Ti_at, ti_based, phase_note, and any identifier columns were excluded.
+Composition features were normalized to 100 wt% before build_features; engineered feature NaNs were left for XGBoost.
+RandomForest was one-hot encoded with an in-fold OneHotEncoder and fits only its training partition.
+Library versions: pandas=3.1.0, numpy=2.5.3, scikit-learn=1.9.1, xgboost=3.4.1.
+Repeated split protocol: 30 GroupShuffleSplit runs, test_size=0.2, seeds 0 through 29, group ID from all *_wt columns rounded to one decimal.
+Pooled OOF protocol: 5-fold GroupKFold, each eligible row predicted once by a model that did not see its composition group.
+Summary standard deviation is the sample SD (ddof=1) across the 30 split scores.
+
+Candidate 1 — baseline XGBoost
+------------------------------
+Scope: All rows in dataset_v2.csv.
+Eligible rows: 754 across 754 composition groups.
+Repeated-split test R2: mean=0.543663, std=0.064605, min=0.365085, max=0.658634.
+Repeated-split test MAE (GPa): mean=10.1861, std=0.8103, min=8.7971, max=11.8805.
+Pooled 5-fold GroupKFold OOF: R2=0.568994, MAE=10.0021 GPa.
+Per-split scores (seed | test rows | R2 | MAE GPa):
+   0 | 151 | 0.464070 | 10.8645
+   1 | 151 | 0.520260 | 9.9681
+   2 | 151 | 0.573758 | 10.2669
+   3 | 151 | 0.584039 | 10.4620
+   4 | 151 | 0.478684 | 9.7925
+   5 | 151 | 0.640415 | 8.7971
+   6 | 151 | 0.572382 | 10.5734
+   7 | 151 | 0.644505 | 10.6280
+   8 | 151 | 0.365085 | 10.8218
+   9 | 151 | 0.629566 | 10.3421
+  10 | 151 | 0.658634 | 10.0111
+  11 | 151 | 0.554663 | 9.0339
+  12 | 151 | 0.562756 | 9.7179
+  13 | 151 | 0.509606 | 10.1549
+  14 | 151 | 0.497257 | 10.4966
+  15 | 151 | 0.518252 | 11.4093
+  16 | 151 | 0.597917 | 9.6242
+  17 | 151 | 0.575320 | 8.9989
+  18 | 151 | 0.512160 | 11.8805
+  19 | 151 | 0.495829 | 10.1590
+  20 | 151 | 0.526637 | 9.4427
+  21 | 151 | 0.520305 | 9.8078
+  22 | 151 | 0.425644 | 10.1956
+  23 | 151 | 0.528978 | 9.8348
+  24 | 151 | 0.591008 | 9.3837
+  25 | 151 | 0.570463 | 11.5835
+  26 | 151 | 0.564964 | 9.7251
+  27 | 151 | 0.589111 | 10.9351
+  28 | 151 | 0.543223 | 8.9960
+  29 | 151 | 0.494398 | 11.6754
+
+Candidate 2 — XGBoost + Random Forest mean ensemble
+---------------------------------------------------
+Scope: All rows in dataset_v2.csv; prediction is the arithmetic mean of XGBoost and Random Forest predictions.
+Eligible rows: 754 across 754 composition groups.
+Repeated-split test R2: mean=0.569913, std=0.062740, min=0.396614, max=0.690921.
+Repeated-split test MAE (GPa): mean=9.8851, std=0.7592, min=8.7338, max=11.3664.
+Pooled 5-fold GroupKFold OOF: R2=0.599933, MAE=9.6666 GPa.
+Per-split scores (seed | test rows | R2 | MAE GPa):
+   0 | 151 | 0.481541 | 10.5453
+   1 | 151 | 0.527980 | 9.8956
+   2 | 151 | 0.603053 | 9.7512
+   3 | 151 | 0.602419 | 10.1267
+   4 | 151 | 0.490517 | 9.6819
+   5 | 151 | 0.651123 | 8.7338
+   6 | 151 | 0.599692 | 10.1420
+   7 | 151 | 0.671383 | 10.2498
+   8 | 151 | 0.396614 | 10.5508
+   9 | 151 | 0.671161 | 9.8749
+  10 | 151 | 0.690921 | 9.6739
+  11 | 151 | 0.559751 | 8.9736
+  12 | 151 | 0.603854 | 9.2944
+  13 | 151 | 0.559353 | 9.6359
+  14 | 151 | 0.524419 | 10.2958
+  15 | 151 | 0.557291 | 11.1307
+  16 | 151 | 0.624573 | 9.1979
+  17 | 151 | 0.589464 | 8.7848
+  18 | 151 | 0.542260 | 11.3664
+  19 | 151 | 0.529857 | 9.8814
+  20 | 151 | 0.564944 | 9.0933
+  21 | 151 | 0.557893 | 9.5442
+  22 | 151 | 0.471615 | 9.6722
+  23 | 151 | 0.557231 | 9.4058
+  24 | 151 | 0.620276 | 9.0049
+  25 | 151 | 0.587040 | 11.2400
+  26 | 151 | 0.576239 | 9.5364
+  27 | 151 | 0.585921 | 10.9270
+  28 | 151 | 0.557723 | 9.0968
+  29 | 151 | 0.541285 | 11.2464
+
+Candidate 3 — beta-type scope-restricted XGBoost
+------------------------------------------------
+Scope: Rows with Mo_eq > 10 wt% OR (Nb_wt + Ta_wt + Mo_wt + V_wt >= 15 wt%). This model only covers this defined beta-type scope.
+Eligible rows: 441 across 441 composition groups.
+Repeated-split test R2: mean=0.576739, std=0.094070, min=0.189964, max=0.753627.
+Repeated-split test MAE (GPa): mean=9.2396, std=0.9029, min=7.2247, max=10.9768.
+Pooled 5-fold GroupKFold OOF: R2=0.577288, MAE=9.0349 GPa.
+Per-split scores (seed | test rows | R2 | MAE GPa):
+   0 |  89 | 0.619886 | 9.5224
+   1 |  89 | 0.583960 | 9.3532
+   2 |  89 | 0.522528 | 10.6286
+   3 |  89 | 0.753627 | 8.1395
+   4 |  89 | 0.515143 | 9.1994
+   5 |  89 | 0.532349 | 10.9768
+   6 |  89 | 0.589005 | 10.1414
+   7 |  89 | 0.548856 | 8.3983
+   8 |  89 | 0.189964 | 10.6467
+   9 |  89 | 0.541698 | 8.9816
+  10 |  89 | 0.683848 | 8.5307
+  11 |  89 | 0.654305 | 8.6044
+  12 |  89 | 0.588840 | 8.5969
+  13 |  89 | 0.566489 | 7.2247
+  14 |  89 | 0.656612 | 9.5873
+  15 |  89 | 0.520178 | 10.4954
+  16 |  89 | 0.541570 | 9.0868
+  17 |  89 | 0.572722 | 8.5958
+  18 |  89 | 0.644271 | 8.7919
+  19 |  89 | 0.522834 | 10.2433
+  20 |  89 | 0.644089 | 8.6758
+  21 |  89 | 0.627242 | 7.6931
+  22 |  89 | 0.601386 | 8.8239
+  23 |  89 | 0.534468 | 9.5943
+  24 |  89 | 0.591479 | 8.6445
+  25 |  89 | 0.492962 | 10.1557
+  26 |  89 | 0.581237 | 10.1616
+  27 |  89 | 0.649582 | 9.3563
+  28 |  89 | 0.584873 | 9.0577
+  29 |  89 | 0.646174 | 9.2804
+
+Candidate 4 — Ti-matrix heavy-element XGBoost
+---------------------------------------------
+Scope: Rows in dataset_v2.csv with Ti_wt < 70 wt%; dataset_v2.csv is already restricted to Ti_at >= 60 at%. This model only covers these heavy-element Ti-matrix rows.
+Eligible rows: 222 across 222 composition groups.
+Repeated-split test R2: mean=0.435660, std=0.143907, min=0.127064, max=0.681060.
+Repeated-split test MAE (GPa): mean=8.9156, std=1.1708, min=6.5823, max=10.8049.
+Pooled 5-fold GroupKFold OOF: R2=0.503559, MAE=8.3844 GPa.
+Per-split scores (seed | test rows | R2 | MAE GPa):
+   0 |  45 | 0.603664 | 9.2729
+   1 |  45 | 0.262014 | 8.6761
+   2 |  45 | 0.569648 | 9.0312
+   3 |  45 | 0.460215 | 9.4276
+   4 |  45 | 0.211986 | 8.2551
+   5 |  45 | 0.396448 | 7.3707
+   6 |  45 | 0.466385 | 7.9921
+   7 |  45 | 0.535049 | 7.6040
+   8 |  45 | 0.402254 | 10.6118
+   9 |  45 | 0.681060 | 7.3533
+  10 |  45 | 0.618213 | 8.9156
+  11 |  45 | 0.358762 | 7.6028
+  12 |  45 | 0.468425 | 8.1042
+  13 |  45 | 0.164134 | 8.6360
+  14 |  45 | 0.397625 | 10.1631
+  15 |  45 | 0.530742 | 6.5823
+  16 |  45 | 0.331803 | 8.8249
+  17 |  45 | 0.468175 | 8.9425
+  18 |  45 | 0.499733 | 10.0686
+  19 |  45 | 0.496527 | 10.1841
+  20 |  45 | 0.478584 | 10.5981
+  21 |  45 | 0.590323 | 7.7993
+  22 |  45 | 0.452105 | 9.6663
+  23 |  45 | 0.519241 | 10.5161
+  24 |  45 | 0.215260 | 8.7040
+  25 |  45 | 0.541949 | 10.3398
+  26 |  45 | 0.127064 | 7.3140
+  27 |  45 | 0.490263 | 10.8049
+  28 |  45 | 0.200338 | 9.6536
+  29 |  45 | 0.531821 | 8.4544
+
+Like-for-like interpretation
+-----------------------------
+Candidates 1 and 2 use the same full-dataset scope and identical split seeds, so their repeated-split results are like-for-like.
+Candidates 3 and 4 are evaluated only within their respective restricted scopes. Their test rows differ from Candidate 1's test rows; their R2 and MAE are not directly comparable to Candidate 1 as evidence of a better general-purpose model.
+A scope-restricted model only covers rows satisfying its scope definition; predictions outside that scope are not evaluated or claimed.
+No rows or splits were selected or removed based on model errors or scores.
+
+Choices:
+- Candidate 3 uses the user-defined OR condition exactly and applies it before each split.
+- Candidate 4 uses Ti_wt < 70 within dataset_v2.csv, whose existing population is Ti_at >= 60 at%.
+- The arithmetic ensemble gives equal weight to the XGBoost and Random Forest predictions.
+- The pooled OOF R2 is computed once from the concatenated held-out predictions, rather than averaging fold R2 values.

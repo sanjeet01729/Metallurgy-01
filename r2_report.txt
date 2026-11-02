@@ -1,0 +1,50 @@
+FINAL MODEL R2 AND ERROR REPORT
+================================
+Saved model: ti_ym_model_v2.joblib (used without refitting for train/test metrics).
+Feature set: B; XGBoost objective: reg:absoluteerror; saved default parameters.
+Feature pipeline: raw *_wt columns -> zero-fill absent columns/cells -> normalize to 100 wt% -> build_features -> saved feature column order.
+phase_est is passed as a raw category because the saved pipeline one-hot encodes it internally.
+
+Software versions:
+- pandas 3.1.0
+- numpy 2.5.3
+- scikit-learn 1.9.1
+- joblib 1.6.0
+
+Train data metrics (saved model):
+- n rows: 603
+- R2: 0.940338
+- MAE: 2.0983 GPa
+- RMSE: 4.8431 GPa
+
+Test data metrics (saved model):
+- n rows: 151
+- R2: 0.687213
+- MAE: 9.8392 GPa
+- RMSE: 12.9252 GPa
+
+Test subgroup metrics:
+- phase_est == beta: n=28, R2=0.776666, MAE=7.7785 GPa
+- E_GPa < 60: n=41, R2=-2.368963, MAE=11.3532 GPa
+- Ti_wt < 70: n=46, R2=0.785862, MAE=7.8397 GPa
+
+Train-test gap (test minus train):
+- R2 gap: -0.253125
+- MAE gap: +7.7409 GPa
+
+Test sanity check:
+- R2=0.687213 (expected about 0.684)
+- MAE=9.8392 GPa (expected about 9.88 GPa)
+- RMSE=12.9252 GPa (expected about 13.0 GPa)
+- PASS: all test metrics are within the configured tolerances.
+
+Five-fold GroupKFold on train_v2.csv (same saved pipeline settings; a fresh clone was fitted on each CV fold only):
+- Group key: all *_wt columns rounded to one decimal place.
+- Fold composition overlap: zero (asserted).
+- R2 mean +/- sample SD: 0.509156 +/- 0.088404
+- MAE mean +/- sample SD: 10.1905 +/- 0.6326 GPa
+- Per-fold R2: 0.459444, 0.562553, 0.593067, 0.552138, 0.378579
+- Per-fold MAE (GPa): 10.6557, 10.0578, 9.6430, 9.5757, 11.0204
+
+Interpretation: train R2 is an in-sample fit statistic; grouped CV is the more appropriate train-side generalization estimate.
+Standard-deviation convention: sample SD (ddof=1) across the five fold scores.

@@ -1,434 +1,365 @@
+
+import os
+import warnings
+import joblib
 import numpy as np
 import pandas as pd
-import joblib
-import shap
 import matplotlib.pyplot as plt
+import shap
 
-from xgboost import XGBRegressor
-
-from sklearn.model_selection import KFold, cross_validate
+from sklearn.base import clone
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
+from sklearn.model_selection import KFold, cross_validate
 from sklearn.metrics import (
     r2_score,
     mean_absolute_error,
     mean_squared_error,
-    mean_absolute_percentage_error
 )
+from sklearn.ensemble import (
+    ExtraTreesRegressor,
+    RandomForestRegressor,
+    GradientBoostingRegressor,
+    HistGradientBoostingRegressor,
+    RandomForestRegressor,
+)
+from sklearn.linear_model import Ridge
+from xgboost import XGBRegressor
 
+warnings.filterwarnings("ignore")
 
-# ============================================================
-# 1. LOAD DATA
-# ============================================================
+# --------------------------------------------------
+# CONFIGURATION
+# --------------------------------------------------
 
-DATA_FILE = "titanium_alloys.csv"
-
-# Output files — pipeline name matches what app.py loads
-MODEL_FILE = "titanium_ym_pipeline.pkl"
-METRICS_FILE = "model_metrics.pkl"
-SHAP_FILE = "shap_feature_importance.csv"
-SHAP_PLOT = "shap_summary.png"
-
-df = pd.read_csv(DATA_FILE)
-
-# Clean column names
-df.columns = [str(c).strip() for c in df.columns]
+TRAIN_FILE = "titanium_train.csv"
+TEST_FILE = "titanium_test.csv"
 
 TARGET = "YM (GPa)"
 
-# Remove rows without target
-df = df.dropna(subset=[TARGET]).copy()
-
-print("=" * 70)
-print("DATASET")
-print("=" * 70)
-
-print(f"Samples: {len(df)}")
-print(f"Columns: {len(df.columns)}")
-print(f"Target:  {TARGET}")
-
-
-# ============================================================
-# 2. FEATURE ENGINEERING
-# ============================================================
-
-df["VEC_sq"] = df["VEC (-)"] ** 2
-
-df["Mo_eq_x_VEC"] = (
-    df["(Mo)eq"] * df["VEC (-)"]
-)
-
-df["Beta_Stabilizers"] = (
-    df["Nb"]
-    + df["Zr"]
-    + df["Fe"]
-    + df["Mo"]
-)
-
-
-# ============================================================
-# 3. SELECT FEATURES
-# ============================================================
-#
-# Column names contain special Unicode characters (Greek Ano
-# Teleia vs Middle Dot, etc.) that can silently mismatch when
-# the script is saved in a different editor.  To avoid this,
-# we build the feature list from the actual DataFrame columns.
-#
-
-def _col(df, keyword):
-    """Find a column whose name contains *keyword* (case-sensitive)."""
-    matches = [c for c in df.columns if keyword in c]
-    if len(matches) == 1:
-        return matches[0]
-    if len(matches) > 1:
-        # Return shortest match to prefer exact hits
-        return min(matches, key=len)
-    raise KeyError(f"No column matching '{keyword}' found in dataset.")
-
-
-feature_cols = [
-    # Composition (exact names)
-    "Ti", "Nb", "Zr", "Fe", "Sn", "Ta", "Mo",
-    "Al", "V", "Cr", "Cu", "Hf", "Mn", "W", "Sc", "Si",
-
-    # Physical properties — looked up by substring
-    _col(df, "cm"),          # ρ (g·cm⁻³)
-    _col(df, "Thc"),         # Thc (W·m⁻¹·K⁻¹)
-    "r (pm)",
-
-    # Electronic descriptors
-    _col(df, "χᴾ (-)"),      # χᴾ (-)    — Pauling electronegativity
-    _col(df, "χᴬ (-)"),      # χᴬ (-)    — Allen electronegativity
-    "VEC (-)",
-    "e/a (-)",
-
-    # Atomic / chemical descriptors
-    "δr (%)",
-    _col(df, "δχᴾ"),         # δχᴾ (%)
-    _col(df, "Δχᴾ"),         # Δχᴾ (-)
-    _col(df, "δχᴬ"),         # δχᴬ (%)
-    _col(df, "Δχᴬ"),         # Δχᴬ (-)
-    _col(df, "ΔVEC"),         # ΔVEC (-)
-
-    # Thermodynamic descriptors
-    _col(df, "Sᵐ"),          # ΔSᵐ (J·mol⁻¹·K⁻¹)
-    _col(df, "Hᶦ"),          # ΔHᶦᶜ (kJ·mol⁻¹)
-
-    # Phase-related descriptors
-    _col(df, "bcc) (J"),     # Sˣˢ (bcc) (J·mol⁻¹·K⁻¹)
-    _col(df, "fcc) (J"),     # Sˣˢ (fcc) (J·mol⁻¹·K⁻¹)
-    _col(df, "ɣ"),           # ɣ (-)
-    _col(df, "φ (bcc)"),     # φ (bcc) (-)
-    _col(df, "φ (fcc)"),     # φ (fcc) (-)
-
-    # Beta stability
-    "(Mo)eq",
-    "Type",
-
-    # Engineered features
-    "VEC_sq",
-    "Mo_eq_x_VEC",
-    "Beta_Stabilizers"
+# Composition-only features: must match your cleaned CSV.
+FEATURES = [
+    "Ti", "Nb", "Zr", "Fe", "Sn", "Ta", "Mo", "Al",
+    "V", "Cr", "Cu", "Hf", "Mn", "W", "Sc", "Si"
 ]
 
+MODEL_FILE = "titanium_ym_pipeline.pkl"
+METRICS_FILE = "model_metrics.pkl"
+IMPORTANCE_FILE = "shap_feature_importance.csv"
+PLOT_FILE = "shap_summary.png"
 
-# Final safety check
-missing_features = [
-    col for col in feature_cols
-    if col not in df.columns
-]
+RANDOM_STATE = 42
+N_SPLITS = 5
 
-if missing_features:
-    print("\nERROR: Missing feature columns:")
-    for col in missing_features:
-        print(" -", col)
-    raise ValueError(
-        "Some required feature columns are missing from the dataset."
-    )
+# --------------------------------------------------
+# LOAD AND VALIDATE DATA
+# --------------------------------------------------
+
+def load_dataset(path):
+    if not os.path.exists(path):
+        raise FileNotFoundError(
+            f"Could not find {path}. Run this script from the "
+            "directory containing the CSV files."
+        )
+
+    df = pd.read_csv(path)
+    df.columns = df.columns.str.strip()
+
+    required = FEATURES + [TARGET]
+    missing = [col for col in required if col not in df.columns]
+
+    if missing:
+        raise ValueError(
+            f"{path} is missing required columns: {missing}\n"
+            f"Available columns: {df.columns.tolist()}"
+        )
+
+    # Convert composition and target columns to numeric.
+    for col in required:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    # A target value is required for supervised training/evaluation.
+    df = df.dropna(subset=[TARGET]).copy()
+
+    # Remove invalid target values.
+    df = df[np.isfinite(df[TARGET])]
+
+    # Treat infinite feature values as missing; imputer handles them.
+    df[FEATURES] = df[FEATURES].replace([np.inf, -np.inf], np.nan)
+
+    if df.empty:
+        raise ValueError(f"No usable rows found in {path}.")
+
+    return df
 
 
-X = df[feature_cols].copy()
-y = df[TARGET].copy()
+train_df = load_dataset(TRAIN_FILE)
+test_df = load_dataset(TEST_FILE)
 
-# Convert predictors to numeric
-X = X.apply(pd.to_numeric, errors="coerce")
+X_train = train_df[FEATURES]
+y_train = train_df[TARGET]
 
+X_test = test_df[FEATURES]
+y_test = test_df[TARGET]
 
-print(f"\nNumber of predictor features: {X.shape[1]}")
-print(f"Total training samples:       {X.shape[0]}  (entire dataset)")
+print("=" * 60)
+print("TITANIUM ALLOY YOUNG'S MODULUS MODEL")
+print("=" * 60)
+print(f"Training rows: {len(train_df)}")
+print(f"Testing rows:  {len(test_df)}")
+print(f"Features:      {len(FEATURES)}")
+print(f"Target:        {TARGET}")
 
+# --------------------------------------------------
+# DEFINE MODELS
+# --------------------------------------------------
 
-# ============================================================
-# 4. XGBOOST MODEL
-# ============================================================
+models = {
+    "Ridge": Ridge(alpha=1.0),
 
-xgb_model = XGBRegressor(
-    n_estimators=500,
-    learning_rate=0.03,
-    max_depth=6,
-    subsample=0.8,
-    colsample_bytree=0.8,
-    objective="reg:squarederror",
-    random_state=42,
-    n_jobs=-1
-)
-
-
-# ============================================================
-# 5. PREPROCESSING PIPELINE
-# ============================================================
-
-model_pipeline = Pipeline([
-    (
-        "imputer",
-        SimpleImputer(strategy="median")
+    "RandomForest": RandomForestRegressor(
+        n_estimators=400,
+        min_samples_leaf=2,
+        random_state=RANDOM_STATE,
+        n_jobs=-1,
     ),
-    (
-        "model",
-        xgb_model
-    )
-])
 
+    "ExtraTrees": ExtraTreesRegressor(
+        n_estimators=400,
+        min_samples_leaf=2,
+        random_state=RANDOM_STATE,
+        n_jobs=-1,
+    ),
 
-# ============================================================
-# 6. 5-FOLD CROSS VALIDATION  (for performance reporting)
-# ============================================================
+    "GradientBoosting": GradientBoostingRegressor(
+        n_estimators=200,
+        learning_rate=0.03,
+        max_depth=2,
+        loss="huber",
+        random_state=RANDOM_STATE,
+    ),
 
-print()
-print("=" * 70)
-print("5-FOLD CROSS VALIDATION")
-print("=" * 70)
+    "HistGradientBoosting": HistGradientBoostingRegressor(
+        max_iter=200,
+        learning_rate=0.05,
+        l2_regularization=1.0,
+        random_state=RANDOM_STATE,
+    ),
 
-kf = KFold(
-    n_splits=5,
+    "XGBoost": XGBRegressor(
+        n_estimators=300,
+        max_depth=3,
+        learning_rate=0.03,
+        subsample=0.8,
+        colsample_bytree=0.9,
+        reg_lambda=2.0,
+        objective="reg:squarederror",
+        random_state=RANDOM_STATE,
+        n_jobs=-1,
+    ),
+}
+
+# --------------------------------------------------
+# CROSS-VALIDATION ON TRAINING DATA ONLY
+# --------------------------------------------------
+
+cv = KFold(
+    n_splits=N_SPLITS,
     shuffle=True,
-    random_state=42
+    random_state=RANDOM_STATE,
 )
 
 scoring = {
     "r2": "r2",
     "mae": "neg_mean_absolute_error",
-    "rmse": "neg_root_mean_squared_error",
-    "mape": "neg_mean_absolute_percentage_error"
+    "mse": "neg_mean_squared_error",
 }
 
-cv_results = cross_validate(
-    model_pipeline,
-    X,
-    y,
-    cv=kf,
-    scoring=scoring,
-    n_jobs=-1
+cv_results = []
+
+print("\nCross-validation results (training data only)")
+print("-" * 60)
+
+for name, estimator in models.items():
+    pipeline = Pipeline([
+        ("imputer", SimpleImputer(strategy="median")),
+        ("model", clone(estimator)),
+    ])
+
+    scores = cross_validate(
+        pipeline,
+        X_train,
+        y_train,
+        cv=cv,
+        scoring=scoring,
+        n_jobs=1,
+        error_score="raise",
+    )
+
+    mean_r2 = scores["test_r2"].mean()
+    std_r2 = scores["test_r2"].std()
+    mean_mae = -scores["test_mae"].mean()
+    mean_rmse = np.sqrt(-scores["test_mse"]).mean()
+
+    cv_results.append({
+        "Model": name,
+        "CV_R2_mean": mean_r2,
+        "CV_R2_std": std_r2,
+        "CV_MAE_GPa": mean_mae,
+        "CV_RMSE_GPa": mean_rmse,
+    })
+
+    print(
+        f"{name:22s} | "
+        f"R² = {mean_r2:.4f} ± {std_r2:.4f} | "
+        f"MAE = {mean_mae:.3f} GPa | "
+        f"RMSE = {mean_rmse:.3f} GPa"
+    )
+
+results_df = pd.DataFrame(cv_results).sort_values(
+    "CV_RMSE_GPa", ascending=True
 )
 
+results_df.to_csv("model_comparison.csv", index=False)
 
-# Convert negative sklearn scoring back to positive
-cv_r2 = cv_results["test_r2"]
+# Select the best model based on training-set CV RMSE.
+best_name = results_df.iloc[0]["Model"]
+best_estimator = clone(models[best_name])
 
-cv_mae = -cv_results["test_mae"]
+print("\nSelected model:", best_name)
+print("Selection criterion: lowest mean CV RMSE")
 
-cv_rmse = -cv_results["test_rmse"]
+# --------------------------------------------------
+# FIT SELECTED MODEL ON TRAINING DATA
+# --------------------------------------------------
 
-cv_mape = -cv_results["test_mape"] * 100
+best_pipeline = Pipeline([
+    ("imputer", SimpleImputer(strategy="median")),
+    ("model", best_estimator),
+])
 
+best_pipeline.fit(X_train, y_train)
 
-print(
-    f"R²   : {cv_r2.mean():.4f} ± {cv_r2.std():.4f}"
-)
+# --------------------------------------------------
+# FINAL HELD-OUT TEST EVALUATION
+# --------------------------------------------------
 
-print(
-    f"MAE  : {cv_mae.mean():.2f} ± "
-    f"{cv_mae.std():.2f} GPa"
-)
+test_predictions = best_pipeline.predict(X_test)
 
-print(
-    f"RMSE : {cv_rmse.mean():.2f} ± "
-    f"{cv_rmse.std():.2f} GPa"
-)
+test_r2 = r2_score(y_test, test_predictions)
+test_mae = mean_absolute_error(y_test, test_predictions)
+test_rmse = np.sqrt(mean_squared_error(y_test, test_predictions))
 
-print(
-    f"MAPE : {cv_mape.mean():.2f} ± "
-    f"{cv_mape.std():.2f}%"
-)
+print("\nHeld-out test results")
+print("-" * 60)
+print(f"Model: {best_name}")
+print(f"Test R²:   {test_r2:.4f}")
+print(f"Test MAE:  {test_mae:.3f} GPa")
+print(f"Test RMSE: {test_rmse:.3f} GPa")
 
-
-# ============================================================
-# 7. TRAIN FINAL MODEL ON ENTIRE DATASET
-# ============================================================
-
-print()
-print("=" * 70)
-print("TRAINING FINAL MODEL (entire dataset)")
-print("=" * 70)
-
-model_pipeline.fit(X, y)
-
-# Quick sanity check — resubstitution metrics
-y_pred_train = model_pipeline.predict(X)
-train_r2 = r2_score(y, y_pred_train)
-train_mae = mean_absolute_error(y, y_pred_train)
-train_rmse = np.sqrt(mean_squared_error(y, y_pred_train))
-
-print(f"Resubstitution R²   : {train_r2:.4f}")
-print(f"Resubstitution MAE  : {train_mae:.2f} GPa")
-print(f"Resubstitution RMSE : {train_rmse:.2f} GPa")
-
-
-# ============================================================
-# 8. SHAP ANALYSIS
-# ============================================================
-
-print()
-print("=" * 70)
-print("SHAP ANALYSIS")
-print("=" * 70)
-
-
-# Extract fitted imputer
-imputer = model_pipeline.named_steps["imputer"]
-
-# Extract fitted XGBoost model
-model = model_pipeline.named_steps["model"]
-
-
-# Transform all data using the fitted imputer
-X_imputed = imputer.transform(X)
-
-# Convert back to DataFrame
-X_imputed = pd.DataFrame(
-    X_imputed,
-    columns=X.columns,
-    index=X.index
-)
-
-
-# Create SHAP explainer
-explainer = shap.TreeExplainer(model)
-
-shap_values = explainer.shap_values(
-    X_imputed
-)
-
-
-# ============================================================
-# 9. GLOBAL SHAP IMPORTANCE
-# ============================================================
-
-shap_importance = pd.DataFrame({
-    "Feature": X_imputed.columns,
-    "Mean_Absolute_SHAP": np.abs(shap_values).mean(axis=0)
+# Save individual test predictions for inspection.
+predictions_df = pd.DataFrame({
+    "Actual_YM_GPa": y_test.to_numpy(),
+    "Predicted_YM_GPa": test_predictions,
+    "Absolute_Error_GPa": np.abs(
+        y_test.to_numpy() - test_predictions
+    ),
 })
 
-shap_importance = shap_importance.sort_values(
-    "Mean_Absolute_SHAP",
-    ascending=False
+predictions_df.to_csv("test_predictions.csv", index=False)
+
+# --------------------------------------------------
+# SHAP FEATURE IMPORTANCE
+# --------------------------------------------------
+
+print("\nCalculating SHAP feature importance...")
+
+fitted_model = best_pipeline.named_steps["model"]
+imputer = best_pipeline.named_steps["imputer"]
+
+X_train_imputed = pd.DataFrame(
+    imputer.transform(X_train),
+    columns=FEATURES,
+    index=X_train.index,
 )
 
+# Tree models: use TreeExplainer.
+# Ridge: use LinearExplainer.
+try:
+    if best_name == "Ridge":
+        explainer = shap.LinearExplainer(
+            fitted_model,
+            X_train_imputed,
+        )
+    else:
+        explainer = shap.TreeExplainer(fitted_model)
 
-print()
-print("TOP 15 FEATURES")
-print("-" * 50)
+    # Bound computation time on larger datasets.
+    X_shap = X_train_imputed.sample(
+        n=min(300, len(X_train_imputed)),
+        random_state=RANDOM_STATE,
+    )
 
-print(
-    shap_importance
-    .head(15)
-    .to_string(index=False)
-)
+    shap_values = explainer.shap_values(X_shap)
 
+    if isinstance(shap_values, list):
+        shap_values = shap_values[0]
 
-# Save SHAP importance
-shap_importance.to_csv(
-    SHAP_FILE,
-    index=False
-)
+    mean_abs_shap = np.abs(shap_values).mean(axis=0)
 
+    importance_df = pd.DataFrame({
+        "Feature": FEATURES,
+        "Mean_Absolute_SHAP": mean_abs_shap,
+    }).sort_values("Mean_Absolute_SHAP", ascending=False)
 
-# ============================================================
-# 10. SHAP SUMMARY PLOT
-# ============================================================
+    importance_df.to_csv(IMPORTANCE_FILE, index=False)
 
-plt.figure(figsize=(10, 7))
+    shap.summary_plot(
+        shap_values,
+        X_shap,
+        show=False,
+    )
+    plt.tight_layout()
+    plt.savefig(PLOT_FILE, dpi=300, bbox_inches="tight")
+    plt.close()
 
-shap.summary_plot(
-    shap_values,
-    X_imputed,
-    show=False
-)
+    print("\nTop 10 SHAP features:")
+    print(importance_df.head(10).to_string(index=False))
 
-plt.tight_layout()
+except Exception as exc:
+    print(f"SHAP analysis failed: {exc}")
+    print("Model training and test evaluation completed regardless.")
 
-plt.savefig(
-    SHAP_PLOT,
-    dpi=300,
-    bbox_inches="tight"
-)
-
-plt.close()
-
-
-# ============================================================
-# 11. SAVE MODEL
-# ============================================================
-
-joblib.dump(
-    model_pipeline,
-    MODEL_FILE
-)
-
-
-# ============================================================
-# 12. SAVE METRICS
-# ============================================================
+# --------------------------------------------------
+# SAVE MODEL AND METRICS
+# --------------------------------------------------
 
 metrics = {
-
-    # Dataset
-    "total_samples": len(df),
-    "training_samples": len(X),
-    "num_features": len(feature_cols),
-
-    # Cross validation
-    "cv_r2_mean": float(cv_r2.mean()),
-    "cv_r2_std": float(cv_r2.std()),
-
-    "cv_mae_mean": float(cv_mae.mean()),
-    "cv_mae_std": float(cv_mae.std()),
-
-    "cv_rmse_mean": float(cv_rmse.mean()),
-    "cv_rmse_std": float(cv_rmse.std()),
-
-    "cv_mape_mean": float(cv_mape.mean()),
-    "cv_mape_std": float(cv_mape.std()),
-
-    # Resubstitution (train on all)
-    "train_r2": float(train_r2),
-    "train_mae": float(train_mae),
-    "train_rmse": float(train_rmse),
+    "selected_model": best_name,
+    "features": FEATURES,
+    "target": TARGET,
+    "training_rows": len(train_df),
+    "test_rows": len(test_df),
+    "cv_r2_mean": float(results_df.iloc[0]["CV_R2_mean"]),
+    "cv_r2_std": float(results_df.iloc[0]["CV_R2_std"]),
+    "cv_mae_gpa": float(results_df.iloc[0]["CV_MAE_GPa"]),
+    "cv_rmse_gpa": float(results_df.iloc[0]["CV_RMSE_GPa"]),
+    "test_r2": float(test_r2),
+    "test_mae_gpa": float(test_mae),
+    "test_rmse_gpa": float(test_rmse),
 }
 
+# Save the fitted sklearn Pipeline, not a wrapper, so an app
+# that loads the pipeline with joblib.load can remain compatible.
+joblib.dump(best_pipeline, MODEL_FILE)
+joblib.dump(metrics, METRICS_FILE)
 
-joblib.dump(
-    metrics,
-    METRICS_FILE
-)
+print("\nSaved files:")
+print(f"- {MODEL_FILE}")
+print(f"- {METRICS_FILE}")
+print("- model_comparison.csv")
+print("- test_predictions.csv")
+print(f"- {IMPORTANCE_FILE} (if SHAP succeeded)")
+print(f"- {PLOT_FILE} (if SHAP succeeded)")
 
-
-# ============================================================
-# 13. FINISHED
-# ============================================================
-
-print()
-print("=" * 70)
-print("FILES SAVED")
-print("=" * 70)
-
-print(f"Model:       {MODEL_FILE}")
-print(f"Metrics:     {METRICS_FILE}")
-print(f"SHAP CSV:    {SHAP_FILE}")
-print(f"SHAP Plot:   {SHAP_PLOT}")
-
-print()
-print("=" * 70)
-print("TRAINING COMPLETE")
-print("=" * 70)
+print("\nTraining and evaluation complete.")

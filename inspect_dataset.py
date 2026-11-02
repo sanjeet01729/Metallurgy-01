@@ -1,7 +1,7 @@
 import pandas as pd
 
 # Load dataset
-file = "titanium_alloys.csv"
+file = "titanium_train.csv"
 df = pd.read_csv(file)
 
 print("=" * 70)

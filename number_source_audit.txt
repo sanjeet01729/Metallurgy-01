@@ -1,0 +1,93 @@
+NUMBER-TO-PROMPT SOURCE AUDIT
+=============================
+
+Paper title and author block
+----------------------------
+- "11pt": Requested format, first paragraph (LaTeX article settings).
+- "6-8 pages": Requested report length; the generated PDF contains 8 pages.
+- Section numbers 1 through 7: Required section list.
+- Author, department/college, supervisor, and date are literal TODO placeholders
+  because the prompt did not provide the values.
+
+Data section
+------------
+Source: CONTENT TO USE > Data (Section 2), bullets 1-4.
+- 15 CSV files; 897 rows.
+- Figure-reading uncertainty: about +/-0.5 to 2 GPa.
+- Atomic-percent-to-weight-percent conversion and normalization to 100.
+- 49 computed rows removed: 38 from the Materials Project file and 11 from two
+  DFT figures; 848 rows remain before the Ti-matrix filter.
+- Atomic Ti threshold: 60 at%; 31 removed; 817 retained.
+- Ti-29Nb-13Ta-4.6Zr example: 53.4 wt% Ti and about 72 at% Ti.
+- Composition key rounded to 0.1 wt%; 817 rows collapsed to 754 groups.
+- 30 repeated-composition groups; within-group E standard deviation 8.78 GPa.
+- 80/20 split; random seed 42; 603 train and 151 test.
+- Train E statistics: mean 73.1, SD 19.8, range 23-157 GPa.
+- Test E statistics: mean 75.7, SD 23.2, range 29.5-149 GPa.
+- Test rows with Ti < 70 wt%: 46.
+
+Methods and feature definitions
+-------------------------------
+Source: CONTENT TO USE > Features (Section 3), bullets 1-3; Appendix formula
+paragraph and model validation bullet.
+- Feature groups: A and B; Mo_eq phase cutoffs 2.5 and 10 wt%; Al_eq cutoff
+  8 wt%.
+- XGBoost objectives: squared error and absolute error; 5-fold GroupKFold;
+  RandomizedSearchCV 60 iterations; seed 42.
+- Software versions: pandas 3.1.0, numpy 2.5.3, scikit-learn 1.9.1,
+  xgboost 3.4.1.
+- Formula coefficients, all from the supplied Appendix formula block:
+  Mo_eq = Mo + 0.2Ta + 0.28Nb + 0.4W + 0.67V + 1.25Cr + 1.25Ni
+  + 1.7Mn + 1.7Co + 2.5Fe - Al.
+  Al_eq = Al + Zr/6 + Sn/3 + 10O.
+- Appendix symbols x_i, r_i, r_mean, and R are formula notation, not additional
+  numeric claims. No numerical atomic-property table was added.
+
+Results tables and evaluation
+-----------------------------
+Source: CONTENT TO USE > Results (Section 4).
+- CV means +/- standard deviations, in GPa:
+  A XGB absolute: 11.10 +/- 0.46.
+  A XGB squared: 11.20 +/- 0.29.
+  A Random Forest: 10.40 +/- 0.97.
+  A mean baseline: 15.39 +/- 1.24.
+  B XGB absolute: 10.19 +/- 0.63.
+  B XGB squared: 10.79 +/- 0.92.
+  B Random Forest: 10.21 +/- 1.14.
+  B mean baseline: 15.39 +/- 1.24.
+  Tuned A absolute-error XGB: 10.59 +/- 0.77.
+  Tuned B absolute-error XGB: 10.43 +/- 0.91.
+- Selected B XGB absolute-error model, default parameters.
+- Test metrics: MAE 9.88 GPa, RMSE 13.00 GPa, R2 0.684, n=151.
+- Subgroups: beta-screened MAE 7.78 GPa, n=28; E < 60 GPa MAE 11.51,
+  n=41; Ti < 70 wt% MAE 7.80, n=46.
+- Feature comparison: B-A mean paired gain 0.17 GPa; one-fold SD 0.91 GPa.
+- Composition-curve Zr levels: 0, 4, 8, 12, 18 at.%.
+- Supplied real-point overlap comparison: 28/44 at tolerances of 0.5 wt%
+  composition and 0.5 GPa E. This value was calculated from the point list and
+  train_v2.csv; test_report.txt was not available.
+- Figure x-axis sweep numbers are represented by the supplied figure files;
+  no new curve coordinates or outcomes are stated in the prose.
+
+Discussion and limitations
+--------------------------
+Source: CONTENT TO USE > Discussion/Limitations (Sections 5-6).
+- Label-noise comparison: 1.12x and 8.78 GPa; duplicate-group basis n=30
+  repeated groups as sourced in Data.
+- Earlier-model test MAE 11.53 GPa and R2 0.52.
+- Error example ranges: observed 91-113 GPa; predicted 66-79 GPa.
+- Example compositions: Ti-3Mo-1Nb; Ti-3Mo-1Al; Ti-7.4Cr; Ti-8Mo-1Nb.
+- Sharp-dip example: 38.5 GPa at Ti-14Nb-18Zr.
+- Low-modulus test subset: 41 rows.
+- Expected error: about +/-10 GPa.
+
+References and citations
+------------------------
+The prompt supplied no actual bibliographic entries. Therefore the report
+includes "[reference needed]" markers and no invented author, title, DOI, or year.
+
+Repeated values in the paper
+----------------------------
+Repeated occurrences of the values listed above (for example in the abstract,
+tables, captions, conclusion, and appendix) trace to the same indicated prompt
+source. Structural section numbers and mathematical subscripts are notation.

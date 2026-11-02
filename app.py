@@ -2,6 +2,9 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
+import json
+from pathlib import Path
+from features import prepare_model_input
 
 st.set_page_config(
     page_title="Titanium Alloy Modulus Specification | Materials Informatics",
@@ -210,6 +213,47 @@ div.stButton > button:active {
 </style>
 """, unsafe_allow_html=True)
 
+# ----------------- Load Model & Metrics -----------------
+BASE_DIR = Path(__file__).resolve().parent
+
+@st.cache_resource
+def load_model():
+    return joblib.load(BASE_DIR / 'ti_ym_model_v2.joblib')
+
+@st.cache_resource
+def load_feature_columns():
+    with (BASE_DIR / 'feature_columns_v2.json').open(encoding='utf-8') as file:
+        return json.load(file)
+
+@st.cache_resource
+def load_training_columns():
+    return pd.read_csv(BASE_DIR / 'train_v2.csv', nrows=0).columns.tolist()
+
+@st.cache_resource
+def load_metrics():
+    with (BASE_DIR / 'results_v2.json').open(encoding='utf-8') as file:
+        results = json.load(file)
+    selected = results['selected_model']
+    cv = results['cross_validation']['metrics'][selected['label']]
+    return {
+        "selected_model": selected['label'],
+        "cv_r2_mean": cv['r2_mean'],
+        "cv_mae_gpa": cv['mae_mean'],
+        "cv_rmse_gpa": cv['rmse_mean'],
+        "test_r2": results['test_metrics']['r2'],
+        "test_mae_gpa": results['test_metrics']['mae'],
+        "test_rmse_gpa": results['test_metrics']['rmse'],
+        "training_rows": results['split']['statistics']['train']['rows'],
+        "test_rows": results['split']['statistics']['test']['rows'],
+    }
+
+FEATURES = load_feature_columns()
+TRAINING_COLUMNS = load_training_columns()
+COMPOSITION_COLUMNS = [
+    column for column in TRAINING_COLUMNS if column.endswith('_wt')
+]
+metrics = load_metrics()
+
 # ----------------- Session State Initialization -----------------
 if 'prediction' not in st.session_state:
     st.session_state['prediction'] = None
@@ -231,7 +275,9 @@ if 'exp_val' not in st.session_state:
 element_defaults = {
     'Nb': 10.0, 'Zr': 5.0, 'Fe': 1.0, 'Sn': 4.0,
     'Ta': 0.0, 'Mo': 0.0, 'Al': 0.0, 'V': 0.0,
-    'Cr': 0.0, 'Cu': 0.0, 'W': 0.0
+    'Cr': 0.0, 'Cu': 0.0, 'W': 0.0, 'Co': 0.0,
+    'Hf': 0.0, 'Mn': 0.0, 'O': 0.0, 'Pd': 0.0,
+    'Sc': 0.0, 'Si': 0.0,
 }
 for elem, val in element_defaults.items():
     if f'val_{elem}' not in st.session_state:
@@ -244,7 +290,7 @@ with head_col1:
     st.markdown('<h1 class="masthead-title">Elastic Modulus & Phase Equilibrium Engine</h1>', unsafe_allow_html=True)
     st.markdown(
         '<div class="masthead-subdeck">'
-        'High-fidelity computational estimation of Young’s Modulus (E) across multicomponent titanium alloys. '
+        "High-fidelity computational estimation of Young's Modulus (E) across multicomponent titanium alloys. "
         'Evaluated via empirical valence electron concentrations, Molybdenum equivalence, and ensemble regression.'
         '</div>',
         unsafe_allow_html=True
@@ -252,33 +298,36 @@ with head_col1:
 with head_col2:
     st.markdown('<div style="margin-top: 1.6rem;"></div>', unsafe_allow_html=True)
     with st.popover("Terminology & Metrics Guide", use_container_width=True):
-        st.markdown("""
+        cv_r2 = metrics.get("cv_r2_mean", float('nan'))
+        cv_mae = metrics.get("cv_mae_gpa", float('nan'))
+        cv_rmse = metrics.get("cv_rmse_gpa", float('nan'))
+        st.markdown(f"""
         ### Terminology Guide
         
         **Young's Modulus (E)**  
         The measure of a material's elastic stiffness (in GPa). In biomedical bone implants, a low modulus (< 60 GPa) prevents stress shielding. In aerospace structures, a high modulus (> 100 GPa) provides rigid load bearing.
         
         **Estimated Uncertainty (± GPa)**  
-        The statistical margin of error representing the 95% confidence interval, derived from cross-validation residuals and input composition distance from the training distribution.
+        The statistical margin of error derived from the model's cross-validation residuals (MAE).
         
         **Confidence Level**  
-        Qualitative reliability rating (High, Moderate, Low) based on empirical alloy density in the metallurgical calibration space.
+        Qualitative reliability rating (High, Moderate, Low) based on how well the input composition falls within the training data distribution.
         
         **5-Fold Cross-Validation (CV)**  
         A validation procedure where data is split into 5 folds. The model is trained on 4 and tested on the held-out fold, rotated 5 times to prevent overfitting.
         
-        **R² Score (0.53)**  
-        Coefficient of determination measuring the proportion of variance in Young's modulus explained by compositional and thermodynamic descriptors.
+        **R² Score ({cv_r2:.2f})**  
+        Coefficient of determination measuring the proportion of variance in Young's modulus explained by compositional descriptors.
         
-        **MAE (10.58 GPa) & RMSE (14.55 GPa)**  
+        **MAE ({cv_mae:.2f} GPa) & RMSE ({cv_rmse:.2f} GPa)**  
         Mean Absolute Error and Root Mean Squared Error, quantifying average prediction deviation across experimental alloys.
         
         **External Validation & Error (%)**  
         Direct percentage deviation between user-entered laboratory measurements and model predictions:  
-        $$\\text{Error} = \\frac{|\\text{Predicted} - \\text{Experimental}|}{\\text{Experimental}} \\times 100\\%$$
+        $$\\\\text{{Error}} = \\\\frac{{|\\\\text{{Predicted}} - \\\\text{{Experimental}}|}}{{\\\\text{{Experimental}}}} \\\\times 100\\\\%$$
         
         **Processing Conditions Note**  
-        Measured modulus varies based on heat treatment, solution treating, aging, and cold working, which alter $\\beta$, $\\alpha$, and $\\omega$ phase fractions.
+        Measured modulus varies based on heat treatment, solution treating, aging, and cold working, which alter $\\\\beta$, $\\\\alpha$, and $\\\\omega$ phase fractions.
         """)
 
 st.markdown('<div class="hairline-rule"></div>', unsafe_allow_html=True)
@@ -325,7 +374,7 @@ zr = render_element_input('Zr', "Zirconium (Zr)", step=0.5)
 fe = render_element_input('Fe', "Iron (Fe)", step=0.1)
 sn = render_element_input('Sn', "Tin (Sn)", step=0.5)
 
-with st.sidebar.expander("Secondary Solutes (Ta, Mo, Al, V, Cr, Cu, W)"):
+with st.sidebar.expander("Secondary Solutes"):
     ta = render_element_input('Ta', "Tantalum (Ta)", step=0.5)
     mo = render_element_input('Mo', "Molybdenum (Mo)", step=0.5)
     al = render_element_input('Al', "Aluminium (Al)", step=0.5)
@@ -333,11 +382,20 @@ with st.sidebar.expander("Secondary Solutes (Ta, Mo, Al, V, Cr, Cu, W)"):
     cr = render_element_input('Cr', "Chromium (Cr)", step=0.5)
     cu = render_element_input('Cu', "Copper (Cu)", step=0.5)
     w  = render_element_input('W', "Tungsten (W)", step=0.5)
+    co = render_element_input('Co', "Cobalt (Co)", step=0.5)
+    hf = render_element_input('Hf', "Hafnium (Hf)", step=0.5)
+    mn = render_element_input('Mn', "Manganese (Mn)", step=0.5)
+    oxygen = render_element_input('O', "Oxygen (O)", step=0.1)
+    palladium = render_element_input('Pd', "Palladium (Pd)", step=0.5)
+    sc = render_element_input('Sc', "Scandium (Sc)", step=0.5)
+    si = render_element_input('Si', "Silicon (Si)", step=0.5)
 
 alloy_elements = {
     'Nb': nb, 'Zr': zr, 'Fe': fe, 'Sn': sn,
     'Ta': ta, 'Mo': mo, 'Al': al, 'V': v,
-    'Cr': cr, 'Cu': cu, 'W': w
+    'Cr': cr, 'Cu': cu, 'W': w, 'Co': co,
+    'Hf': hf, 'Mn': mn, 'O': oxygen, 'Pd': palladium,
+    'Sc': sc, 'Si': si,
 }
 
 sum_other = round(sum(alloy_elements.values()), 4)
@@ -352,9 +410,7 @@ else:
     total_comp = round(ti + sum_other, 2)
     is_valid_composition = True
 
-# Thermodynamic Calculations
-mo_eq_calc = (mo + 0.67*v + 0.44*w + 0.28*nb + 0.22*ta + 2.9*fe + 1.6*cr + 1.25*cu)
-vec_calc = (ti*4 + nb*5 + zr*4 + fe*8 + sn*4 + ta*5 + mo*6 + al*3 + v*5 + cr*6 + cu*11 + w*6) / 100.0
+# Feature calculations use the same function and tables used for dataset generation.
 beta_stabilizers = nb + zr + fe + mo
 
 st.sidebar.markdown('<div class="hairline-rule" style="margin: 1.2rem 0;"></div>', unsafe_allow_html=True)
@@ -378,19 +434,34 @@ st.sidebar.markdown('<div class="hairline-rule" style="margin: 1.2rem 0;"></div>
 sidebar_predict = st.sidebar.button("Calculate Young's Modulus", key="sidebar_calc_btn", use_container_width=True)
 
 # ----------------- Feature Vector Construction -----------------
-input_data = pd.DataFrame([{
-    'Ti': ti, 'Nb': nb, 'Zr': zr, 'Fe': fe, 'Sn': sn, 'Ta': ta, 'Mo': mo, 
-    'Al': al, 'V': v, 'Cr': cr, 'Cu': cu, 'Hf': 0.0, 'Mn': 0.0, 'W': w, 
-    'Sc': 0.0, 'Si': 0.0, 'ρ (g·cm⁻³)': 5.20, 'Thc (W·m⁻¹·K⁻¹)': 20.0, 'r (pm)': 142.0, 
-    'χᴾ (-)': 1.60, 'χᴬ (-)': 1.48, 'VEC (-)': vec_calc, 'e/a (-)': 4.25, 'δr (%)': 5.50, 
-    'δχᴾ (%)': 7.00, 'Δχᴾ (-)': 0.11, 'δχᴬ (%)': 10.00, 'Δχᴬ (-)': 0.15, 'ΔVEC (-)': 0.30, 
-    'ΔSᵐ (J·mol⁻¹·K⁻¹)': 8.50, 'ΔHᶦᶜ (kJ·mol⁻¹)': -15.0, 'Sˣˢ (bcc) (J·mol⁻¹·K⁻¹)': -0.80, 
-    'Sˣˢ (fcc) (J·mol⁻¹·K⁻¹)': -1.20, 'ɣ (-)': 1.30, 'φ (bcc) (-)': 4.50, 'φ (fcc) (-)': 2.80, 
-    '(Mo)eq': mo_eq_calc, 'Type': 2.0,
-    'VEC_sq': vec_calc ** 2,
-    'Mo_eq_x_VEC': mo_eq_calc * vec_calc,
-    'Beta_Stabilizers': beta_stabilizers
-}])
+raw_composition = {
+    column: (ti if column == 'Ti_wt' else alloy_elements.get(column[:-3], 0.0))
+    for column in COMPOSITION_COLUMNS
+}
+raw_composition_data = pd.DataFrame([raw_composition])
+raw_input_total = float(raw_composition_data.sum(axis=1).iloc[0])
+input_data, input_ti_at, unknown_elements = prepare_model_input(
+    raw_composition_data,
+    FEATURES,
+    COMPOSITION_COLUMNS,
+)
+# The saved pipeline one-hot encodes raw phase_est internally; keep its JSON schema.
+ti_at_value = float(input_ti_at.iloc[0])
+mo_eq_calc = float(input_data['Mo_eq'].iloc[0])
+vec_calc = float(input_data['VEC'].iloc[0])
+if abs(raw_input_total - 100.0) > 2.0:
+    st.warning(
+        f"Input composition totals {raw_input_total:.2f} wt%; it will be normalized to 100 wt%."
+    )
+if unknown_elements:
+    st.warning(
+        "Element(s) not present in the training columns will be ignored: "
+        + ", ".join(unknown_elements)
+    )
+if ti_at_value < 60.0:
+    st.warning(
+        f"Ti_at is {ti_at_value:.2f} at%, outside the training range (minimum 60 at%)."
+    )
 
 # ----------------- Main Asymmetrical Layout (1.2 : 1.0) -----------------
 col_left, col_right = st.columns([1.2, 1.0], gap="large")
@@ -489,20 +560,15 @@ with col_right:
             st.session_state['prediction'] = None
         else:
             try:
-                model = joblib.load('titanium_ym_pipeline.pkl')
+                model = load_model()
                 pred = float(model.predict(input_data)[0])
                 
-                # Dynamic uncertainty calculation based on distance from dataset centroid
-                uncert_calc = round(float(np.clip(5.80 + 0.04 * abs(mo_eq_calc - 6.0) + 0.06 * fe, 4.50, 9.50)), 2)
-                if uncert_calc < 6.20:
-                    conf_level = "High"
-                elif uncert_calc <= 7.80:
-                    conf_level = "Moderate"
-                else:
-                    conf_level = "Low"
+                uncert_calc = 10.0
+                conf_level = "Outside training range" if ti_at_value < 60.0 else "Moderate"
                 
                 st.session_state['prediction'] = pred
                 st.session_state['predicted_ti'] = ti
+                st.session_state['predicted_ti_at'] = ti_at_value
                 st.session_state['predicted_mo_eq'] = mo_eq_calc
                 st.session_state['predicted_vec'] = vec_calc
                 st.session_state['uncertainty'] = uncert_calc
@@ -522,10 +588,10 @@ with col_right:
                     unsafe_allow_html=True
                 )
 
-    # If prediction exists, render the requested structured box, performance, and validation form
+    # If prediction exists, render the structured box, performance, and validation form
     if st.session_state['prediction'] is not None:
         pred_val = st.session_state['prediction']
-        uncert = st.session_state.get('uncertainty', 6.25)
+        uncert = st.session_state.get('uncertainty', 10.0)
         conf = st.session_state.get('confidence', 'Moderate')
         nominal_formula = st.session_state.get('predicted_alloy', 'Ti-Alloy')
         
@@ -537,6 +603,7 @@ with col_right:
                 <div class="prediction-box-value mono-figure">{pred_val:.2f} <span class="prediction-box-unit">GPa</span></div>
                 <div class="prediction-box-meta">
                     <div>Estimated uncertainty: <span class="mono-figure" style="font-weight: 500; color: #f0ece3;">±{uncert:.2f} GPa</span></div>
+                    <div>expected error about +/-10 GPa</div>
                     <div>Confidence: <span class="mono-figure" style="font-weight: 500; color: #f0ece3;">{conf}</span></div>
                 </div>
             </div>
@@ -544,15 +611,32 @@ with col_right:
             unsafe_allow_html=True
         )
         
-        # 2. Model Performance Block
+        # 2. Model Performance Block — from actual saved metrics
+        cv_r2 = metrics.get("cv_r2_mean", float('nan'))
+        cv_mae = metrics.get("cv_mae_gpa", float('nan'))
+        cv_rmse = metrics.get("cv_rmse_gpa", float('nan'))
+        test_r2 = metrics.get("test_r2", float('nan'))
+        test_mae = metrics.get("test_mae_gpa", float('nan'))
+        test_rmse = metrics.get("test_rmse_gpa", float('nan'))
+        model_name = metrics.get("selected_model", "Unknown")
+        n_train = metrics.get("training_rows", "?")
+        n_test = metrics.get("test_rows", "?")
+
         st.markdown(
-            """
+            f"""
             <div class="bench-section">
-                <div class="bench-title">Model Performance</div>
+                <div class="bench-title">Model Performance — {model_name}</div>
                 <div class="bench-divider"></div>
-                <div class="bench-row"><span class="bench-row-label">5-Fold CV R²</span><span class="bench-row-value">0.53</span></div>
-                <div class="bench-row"><span class="bench-row-label">5-Fold CV MAE</span><span class="bench-row-value">10.58 GPa</span></div>
-                <div class="bench-row"><span class="bench-row-label">5-Fold CV RMSE</span><span class="bench-row-value">14.55 GPa</span></div>
+                <div class="bench-row"><span class="bench-row-label">Training Samples</span><span class="bench-row-value">{n_train}</span></div>
+                <div class="bench-row"><span class="bench-row-label">Test Samples</span><span class="bench-row-value">{n_test}</span></div>
+                <div class="bench-divider"></div>
+                <div class="bench-row"><span class="bench-row-label">5-Fold CV R²</span><span class="bench-row-value">{cv_r2:.2f}</span></div>
+                <div class="bench-row"><span class="bench-row-label">5-Fold CV MAE</span><span class="bench-row-value">{cv_mae:.2f} GPa</span></div>
+                <div class="bench-row"><span class="bench-row-label">5-Fold CV RMSE</span><span class="bench-row-value">{cv_rmse:.2f} GPa</span></div>
+                <div class="bench-divider"></div>
+                <div class="bench-row"><span class="bench-row-label">Test R²</span><span class="bench-row-value">{test_r2:.2f}</span></div>
+                <div class="bench-row"><span class="bench-row-label">Test MAE</span><span class="bench-row-value">{test_mae:.2f} GPa</span></div>
+                <div class="bench-row"><span class="bench-row-label">Test RMSE</span><span class="bench-row-value">{test_rmse:.2f} GPa</span></div>
             </div>
             """,
             unsafe_allow_html=True
@@ -629,7 +713,7 @@ with col_right:
             '<div class="card-label">Evaluation Pending</div>'
             '<div style="font-size: 0.88rem; color: #9c9586; line-height: 1.6; margin-top: 0.5rem;">'
             'Configure elemental mass fractions in the specification panel on the left, then select '
-            '<strong>Calculate Young’s Modulus</strong> to evaluate the formulation, view model uncertainty, and benchmark against external experimental data.'
+            "<strong>Calculate Young's Modulus</strong> to evaluate the formulation, view model uncertainty, and benchmark against external experimental data."
             '</div>'
             '</div>',
             unsafe_allow_html=True
