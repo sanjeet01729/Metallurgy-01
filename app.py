@@ -4,7 +4,7 @@ import numpy as np
 import joblib
 import json
 from pathlib import Path
-from features import prepare_model_input
+from features import make_ensemble_features, prepare_model_input
 
 st.set_page_config(
     page_title="Titanium Alloy Modulus Specification | Materials Informatics",
@@ -213,12 +213,12 @@ div.stButton > button:active {
 </style>
 """, unsafe_allow_html=True)
 
-# ----------------- Load Model & Metrics -----------------
+# ----------------- Load Model & Feature Schema -----------------
 BASE_DIR = Path(__file__).resolve().parent
 
 @st.cache_resource
 def load_model():
-    return joblib.load(BASE_DIR / 'ti_ym_model_v2.joblib')
+    return joblib.load(BASE_DIR / 'ti_ym_ensemble_v2.joblib')
 
 @st.cache_resource
 def load_feature_columns():
@@ -230,29 +230,16 @@ def load_training_columns():
     return pd.read_csv(BASE_DIR / 'train_v2.csv', nrows=0).columns.tolist()
 
 @st.cache_resource
-def load_metrics():
-    with (BASE_DIR / 'results_v2.json').open(encoding='utf-8') as file:
-        results = json.load(file)
-    selected = results['selected_model']
-    cv = results['cross_validation']['metrics'][selected['label']]
-    return {
-        "selected_model": selected['label'],
-        "cv_r2_mean": cv['r2_mean'],
-        "cv_mae_gpa": cv['mae_mean'],
-        "cv_rmse_gpa": cv['rmse_mean'],
-        "test_r2": results['test_metrics']['r2'],
-        "test_mae_gpa": results['test_metrics']['mae'],
-        "test_rmse_gpa": results['test_metrics']['rmse'],
-        "training_rows": results['split']['statistics']['train']['rows'],
-        "test_rows": results['split']['statistics']['test']['rows'],
-    }
+def load_ensemble_feature_columns():
+    with (BASE_DIR / 'ensemble_feature_columns_v2.json').open(encoding='utf-8') as file:
+        return json.load(file)
 
 FEATURES = load_feature_columns()
 TRAINING_COLUMNS = load_training_columns()
+ENSEMBLE_FEATURES = load_ensemble_feature_columns()
 COMPOSITION_COLUMNS = [
     column for column in TRAINING_COLUMNS if column.endswith('_wt')
 ]
-metrics = load_metrics()
 
 # ----------------- Session State Initialization -----------------
 if 'prediction' not in st.session_state:
@@ -297,10 +284,7 @@ with head_col1:
     )
 with head_col2:
     st.markdown('<div style="margin-top: 1.6rem;"></div>', unsafe_allow_html=True)
-    with st.popover("Terminology & Metrics Guide", use_container_width=True):
-        cv_r2 = metrics.get("cv_r2_mean", float('nan'))
-        cv_mae = metrics.get("cv_mae_gpa", float('nan'))
-        cv_rmse = metrics.get("cv_rmse_gpa", float('nan'))
+    with st.popover("Terminology Guide", use_container_width=True):
         st.markdown(f"""
         ### Terminology Guide
         
@@ -308,19 +292,10 @@ with head_col2:
         The measure of a material's elastic stiffness (in GPa). In biomedical bone implants, a low modulus (< 60 GPa) prevents stress shielding. In aerospace structures, a high modulus (> 100 GPa) provides rigid load bearing.
         
         **Estimated Uncertainty (± GPa)**  
-        The statistical margin of error derived from the model's cross-validation residuals (MAE).
+        The displayed error range is an approximate prediction error, not a sample-specific confidence interval.
         
         **Confidence Level**  
         Qualitative reliability rating (High, Moderate, Low) based on how well the input composition falls within the training data distribution.
-        
-        **5-Fold Cross-Validation (CV)**  
-        A validation procedure where data is split into 5 folds. The model is trained on 4 and tested on the held-out fold, rotated 5 times to prevent overfitting.
-        
-        **R² Score ({cv_r2:.2f})**  
-        Coefficient of determination measuring the proportion of variance in Young's modulus explained by compositional descriptors.
-        
-        **MAE ({cv_mae:.2f} GPa) & RMSE ({cv_rmse:.2f} GPa)**  
-        Mean Absolute Error and Root Mean Squared Error, quantifying average prediction deviation across experimental alloys.
         
         **External Validation & Error (%)**  
         Direct percentage deviation between user-entered laboratory measurements and model predictions:  
@@ -445,6 +420,10 @@ input_data, input_ti_at, unknown_elements = prepare_model_input(
     FEATURES,
     COMPOSITION_COLUMNS,
 )
+ensemble_input = make_ensemble_features(
+    input_data,
+    COMPOSITION_COLUMNS,
+).reindex(columns=ENSEMBLE_FEATURES)
 # The saved pipeline one-hot encodes raw phase_est internally; keep its JSON schema.
 ti_at_value = float(input_ti_at.iloc[0])
 mo_eq_calc = float(input_data['Mo_eq'].iloc[0])
@@ -561,7 +540,7 @@ with col_right:
         else:
             try:
                 model = load_model()
-                pred = float(model.predict(input_data)[0])
+                pred = float(model.predict(ensemble_input)[0])
                 
                 uncert_calc = 10.0
                 conf_level = "Outside training range" if ti_at_value < 60.0 else "Moderate"
@@ -588,7 +567,7 @@ with col_right:
                     unsafe_allow_html=True
                 )
 
-    # If prediction exists, render the structured box, performance, and validation form
+    # If prediction exists, render the prediction and validation form
     if st.session_state['prediction'] is not None:
         pred_val = st.session_state['prediction']
         uncert = st.session_state.get('uncertainty', 10.0)
@@ -611,38 +590,7 @@ with col_right:
             unsafe_allow_html=True
         )
         
-        # 2. Model Performance Block — from actual saved metrics
-        cv_r2 = metrics.get("cv_r2_mean", float('nan'))
-        cv_mae = metrics.get("cv_mae_gpa", float('nan'))
-        cv_rmse = metrics.get("cv_rmse_gpa", float('nan'))
-        test_r2 = metrics.get("test_r2", float('nan'))
-        test_mae = metrics.get("test_mae_gpa", float('nan'))
-        test_rmse = metrics.get("test_rmse_gpa", float('nan'))
-        model_name = metrics.get("selected_model", "Unknown")
-        n_train = metrics.get("training_rows", "?")
-        n_test = metrics.get("test_rows", "?")
-
-        st.markdown(
-            f"""
-            <div class="bench-section">
-                <div class="bench-title">Model Performance — {model_name}</div>
-                <div class="bench-divider"></div>
-                <div class="bench-row"><span class="bench-row-label">Training Samples</span><span class="bench-row-value">{n_train}</span></div>
-                <div class="bench-row"><span class="bench-row-label">Test Samples</span><span class="bench-row-value">{n_test}</span></div>
-                <div class="bench-divider"></div>
-                <div class="bench-row"><span class="bench-row-label">5-Fold CV R²</span><span class="bench-row-value">{cv_r2:.2f}</span></div>
-                <div class="bench-row"><span class="bench-row-label">5-Fold CV MAE</span><span class="bench-row-value">{cv_mae:.2f} GPa</span></div>
-                <div class="bench-row"><span class="bench-row-label">5-Fold CV RMSE</span><span class="bench-row-value">{cv_rmse:.2f} GPa</span></div>
-                <div class="bench-divider"></div>
-                <div class="bench-row"><span class="bench-row-label">Test R²</span><span class="bench-row-value">{test_r2:.2f}</span></div>
-                <div class="bench-row"><span class="bench-row-label">Test MAE</span><span class="bench-row-value">{test_mae:.2f} GPa</span></div>
-                <div class="bench-row"><span class="bench-row-label">Test RMSE</span><span class="bench-row-value">{test_rmse:.2f} GPa</span></div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-        
-        # 3. External Validation Block (Interactive Form Type)
+        # External Validation Block (Interactive Form Type)
         st.markdown(
             f"""
             <div class="bench-section" style="margin-bottom: 0.5rem;">

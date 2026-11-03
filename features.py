@@ -117,6 +117,10 @@ BUILD_FEATURE_COLUMNS = [
     "VEC", "delta_r", "delta_S_mix", "Mo_eq", "Al_eq", "Bo", "Md",
     "phase_est", "phase_note", "ti_based",
 ]
+ENSEMBLE_PHASES = ("alpha", "alpha+beta", "beta", "uncertain")
+ENSEMBLE_NUMERIC_FEATURES = (
+    "VEC", "delta_r", "delta_S_mix", "Mo_eq", "Al_eq", "Bo", "Md",
+)
 
 
 def build_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -335,3 +339,38 @@ def prepare_model_input(
         )
     model_input = engineered[feature_columns].copy()
     return model_input, ti_at, unknown_elements
+
+
+def make_ensemble_features(
+    engineered: pd.DataFrame,
+    composition_columns: list[str],
+) -> pd.DataFrame:
+    """Create the numeric, fixed-category input matrix used by the v2 ensemble."""
+    required = [
+        *composition_columns,
+        *ENSEMBLE_NUMERIC_FEATURES,
+        "phase_est",
+    ]
+    missing = [column for column in required if column not in engineered.columns]
+    if missing:
+        raise ValueError(f"Ensemble input is missing required features: {missing}")
+
+    numeric = engineered[
+        [*composition_columns, *ENSEMBLE_NUMERIC_FEATURES]
+    ].apply(pd.to_numeric, errors="coerce")
+    phases = pd.Categorical(
+        engineered["phase_est"],
+        categories=ENSEMBLE_PHASES,
+    )
+    one_hot = pd.get_dummies(
+        pd.Series(phases, index=engineered.index, name="phase_est"),
+        prefix="phase_est",
+        dtype=float,
+    )
+    phase_columns = [
+        f"phase_est_{phase}" for phase in ENSEMBLE_PHASES
+    ]
+    return pd.concat(
+        [numeric, one_hot.reindex(columns=phase_columns, fill_value=0.0)],
+        axis=1,
+    )
